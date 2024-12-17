@@ -12,6 +12,7 @@
 
 setlocal enableextensions enabledelayedexpansion
 
+FOR %%A IN ("%~dp0.") DO SET "REPO_ROOT=%%~dpA"
 if "%MINIFORGE_HOME%"=="" set "MINIFORGE_HOME=%USERPROFILE%\Miniforge3"
 :: Remove trailing backslash, if present
 if "%MINIFORGE_HOME:~-1%"=="\" set "MINIFORGE_HOME=%MINIFORGE_HOME:~0,-1%"
@@ -33,13 +34,14 @@ call "%MICROMAMBA_EXE%" create --yes --root-prefix "%MAMBA_ROOT_PREFIX%" --prefi
     pip rattler-build conda-forge-ci-setup=4 "conda-build>=24.1"
 if !errorlevel! neq 0 exit /b !errorlevel!
 echo Removing %MAMBA_ROOT_PREFIX%
-del /S /Q "%MAMBA_ROOT_PREFIX%"
-del /S /Q "%MICROMAMBA_TMPDIR%"
+del /S /Q "%MAMBA_ROOT_PREFIX%" >nul
+del /S /Q "%MICROMAMBA_TMPDIR%" >nul
 call :end_group
 
 call :start_group "Configuring conda"
 
 :: Activate the base conda environment
+echo Activating environment
 call "%MINIFORGE_HOME%\Scripts\activate.bat"
 :: Configure the solver
 set "CONDA_SOLVER=libmamba"
@@ -69,9 +71,6 @@ if NOT [%HOST_PLATFORM%] == [%BUILD_PLATFORM%] (
 if NOT [%flow_run_id%] == [] (
         set "EXTRA_CB_OPTIONS=%EXTRA_CB_OPTIONS% --extra-meta flow_run_id=%flow_run_id% --extra-meta remote_url=%remote_url% --extra-meta sha=%sha%"
 )
-
-:: build portion of https://github.com/conda-forge/conda-smithy/issues/2057
-set "EXTRA_CB_OPTIONS=%EXTRA_CB_OPTIONS% --experimental"
 
 call :end_group
 
@@ -108,17 +107,13 @@ if /i "%CI%" == "azure" (
 )
 
 :: Validate
-call :start_group "Validating outputs"
-validate_recipe_outputs "%FEEDSTOCK_NAME%"
-if !errorlevel! neq 0 exit /b !errorlevel!
-call :end_group
 
 if /i "%UPLOAD_PACKAGES%" == "true" (
     if /i "%IS_PR_BUILD%" == "false" (
         call :start_group "Uploading packages"
         if not exist "%TEMP%\" md "%TEMP%"
         set "TMP=%TEMP%"
-        upload_package --validate --feedstock-name="%FEEDSTOCK_NAME%" .\ ".\recipe" .ci_support\%CONFIG%.yaml
+        upload_package  .\ ".\recipe" .ci_support\%CONFIG%.yaml
         if !errorlevel! neq 0 exit /b !errorlevel!
         call :end_group
     )
